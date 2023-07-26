@@ -104,7 +104,7 @@ func output(obj runtime.Object, templates []string, urlTemplates []string) {
 
 	for _, url := range urls {
 		// TODO cleanup - template will be a single string we need to split somehow...
-		allUrls := strings.Split(url, "https://")
+		allUrls := strings.Split(strings.TrimPrefix(url, "https://"), "https://")
 		for _, u := range allUrls {
 			browser.OpenURL(fmt.Sprintf("https://%s", u)) // nolint: errcheck
 		}
