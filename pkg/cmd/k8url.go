@@ -72,7 +72,7 @@ func initConfig() {
 		cobra.CheckErr(fmt.Errorf("failed to unmsrshal config: %s", err.Error()))
 	}
 
-	for k, v := range config.ExtraCommands {
+	for k, v := range config.Commands {
 		k, v := k, v
 		dynamicCmd := &cobra.Command{
 			Use:   k,
@@ -106,7 +106,7 @@ func output(obj runtime.Object, templates []string, urlTemplates []string) {
 		// TODO cleanup - template will be a single string we need to split somehow...
 		allUrls := strings.Split(url, "https://")
 		for _, u := range allUrls {
-			browser.OpenURL(fmt.Sprintf("https://%s", u))
+			browser.OpenURL(fmt.Sprintf("https://%s", u)) // nolint: errcheck
 		}
 	}
 }

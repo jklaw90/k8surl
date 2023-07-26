@@ -23,7 +23,7 @@ pod:
     - |
       Other Cool Dashboards:
       - "https://example.com/dashboards/xyz1?name={.metadata.name}&namespace={.metadata.namespace}"
-extraCommands:
+commands:
   meta:
     kinds: ["*"]
     urls:

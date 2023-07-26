@@ -1,13 +1,13 @@
 package cmd
 
 type Config struct {
-	KindAndTemplates KindAndTemplates        `mapstructure:",remain"`
-	ExtraCommands    map[string]ExtraCommand `yaml:"extraCommands"`
+	KindAndTemplates KindAndTemplates   `mapstructure:",remain"`
+	Commands         map[string]Command `yaml:"commands"`
 }
 
 type KindAndTemplates map[string]Tmpl
 
-type ExtraCommand struct {
+type Command struct {
 	Tmpl  `mapstructure:",squash"`
 	Kinds []string `yaml:"kinds"`
 }
