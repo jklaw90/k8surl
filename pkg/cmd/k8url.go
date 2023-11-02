@@ -56,6 +56,8 @@ func Execute() {
 func init() {
 	initConfig()
 	browser.Stdout = nil // not sure if we should do something better here
+	getCmd.DisableFlagParsing = true
+	k8surlCmd.AddCommand(getCmd)
 }
 
 func initConfig() {
