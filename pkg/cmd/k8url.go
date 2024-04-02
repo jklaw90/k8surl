@@ -16,9 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-var (
-	config *Config
-)
+var config *Config
 
 func NewK8surlCmd() *cobra.Command {
 	k8surlCmd := &cobra.Command{
@@ -52,19 +50,28 @@ kubectl k8surl pod <pod-name>`,
 }
 
 func createSubCommandsFromConfig(rootCmd *cobra.Command) {
-	browser.Stdout = nil // not sure if we should do something better here
+	browser.Stdout = nil // reduce noise from browser package
+
 	home, err := os.UserHomeDir()
 	cobra.CheckErr(err)
 	viper.AddConfigPath(home)
 	viper.SetConfigType("yaml")
 	viper.SetConfigName(".k8surl")
-	err = viper.ReadInConfig()
-	cobra.CheckErr(err)
+	cobra.CheckErr(viper.ReadInConfig())
+	cobra.CheckErr(viper.Unmarshal(&config))
 
-	if err := viper.Unmarshal(&config); err != nil {
-		fmt.Fprintln(os.Stderr)
-		cobra.CheckErr(fmt.Errorf("failed to unmsrshal config: %s", err.Error()))
+	configCmd := &cobra.Command{
+		Use:   "config",
+		Short: "view the current configuration",
+		Run: func(cmd *cobra.Command, args []string) {
+			configPath := viper.GetViper().ConfigFileUsed()
+			config, err := os.ReadFile(configPath)
+			cobra.CheckErr(err)
+			fmt.Printf("Current configuration (%s):\n\n", configPath)
+			fmt.Println(string(config))
+		},
 	}
+	rootCmd.AddCommand(configCmd)
 
 	for k, v := range config.Commands {
 		k, v := k, v
@@ -98,7 +105,13 @@ func commandInitilizer(cmd *cobra.Command, args []string) (runtime.Object, strin
 
 	var reader io.Reader
 	if len(args) > 0 {
-		cmdArgs := append([]string{"-o", "json"}, args...)
+		var cmdArgs []string
+		if !slices.ContainsFunc(args, func(arg string) bool {
+			return strings.EqualFold(arg, "-o") || strings.EqualFold(arg, "--output")
+		}) {
+			cmdArgs = append([]string{"-o", "json"}, args...)
+		}
+
 		kubectlCmd := exec.Command("kubectl", cmdArgs...)
 		rawOutput, err := kubectlCmd.Output()
 		if err != nil {
@@ -125,7 +138,7 @@ func output(obj runtime.Object, templates []string, urlTemplates []string) {
 
 	for _, url := range urls {
 		// TODO cleanup - template will be a single string we need to split somehow...
-		allUrls := strings.Split(strings.TrimPrefix(url, "https://"), "https://")
+		allUrls := strings.SplitAfterN(url, "https://", 1)
 		for _, u := range allUrls {
 			browser.OpenURL(fmt.Sprintf("https://%s", u)) // nolint: errcheck
 		}
