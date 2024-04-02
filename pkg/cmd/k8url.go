@@ -21,8 +21,9 @@ var config *Config
 func NewK8surlCmd() *cobra.Command {
 	k8surlCmd := &cobra.Command{
 		Use:                "k8surl",
+		SilenceUsage:       true,
 		DisableFlagParsing: true,
-		DisableSuggestions: true,
+		Args:               cobra.ArbitraryArgs, // allows us to not require -- for kubectl args
 		CompletionOptions:  cobra.CompletionOptions{DisableDefaultCmd: true},
 		Short:              "CLI to read k8s resources and open urls based on your template config",
 		Example: `kubectl get pod <pod-name> -o json | k8surl pod
@@ -61,8 +62,9 @@ func createSubCommandsFromConfig(rootCmd *cobra.Command) {
 	cobra.CheckErr(viper.Unmarshal(&config))
 
 	configCmd := &cobra.Command{
-		Use:   "config",
-		Short: "view the current configuration",
+		Use:          "config",
+		Short:        "view the current configuration",
+		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			configPath := viper.GetViper().ConfigFileUsed()
 			config, err := os.ReadFile(configPath)
@@ -104,12 +106,12 @@ func commandInitilizer(cmd *cobra.Command, args []string) (runtime.Object, strin
 	}
 
 	var reader io.Reader
+	var cmdArgs []string
 	if len(args) > 0 {
-		var cmdArgs []string
 		if !slices.ContainsFunc(args, func(arg string) bool {
 			return strings.EqualFold(arg, "-o") || strings.EqualFold(arg, "--output")
 		}) {
-			cmdArgs = append([]string{"-o", "json"}, args...)
+			cmdArgs = append(args, []string{"-o", "json"}...)
 		}
 
 		kubectlCmd := exec.Command("kubectl", cmdArgs...)
@@ -122,7 +124,11 @@ func commandInitilizer(cmd *cobra.Command, args []string) (runtime.Object, strin
 		reader = cmd.InOrStdin()
 	}
 
-	return parser.Decode(reader)
+	o, kind, err := parser.Decode(reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("kubectl %s returned decoding input: %w", strings.Join(cmdArgs, " "), err)
+	}
+	return o, kind, nil
 }
 
 func output(obj runtime.Object, templates []string, urlTemplates []string) {
@@ -138,7 +144,7 @@ func output(obj runtime.Object, templates []string, urlTemplates []string) {
 
 	for _, url := range urls {
 		// TODO cleanup - template will be a single string we need to split somehow...
-		allUrls := strings.SplitAfterN(url, "https://", 1)
+		allUrls := strings.Split(strings.TrimPrefix(url, "https://"), "https://")
 		for _, u := range allUrls {
 			browser.OpenURL(fmt.Sprintf("https://%s", u)) // nolint: errcheck
 		}
