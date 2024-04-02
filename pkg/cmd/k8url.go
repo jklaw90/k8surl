@@ -20,14 +20,14 @@ var config *Config
 
 func NewK8surlCmd() *cobra.Command {
 	k8surlCmd := &cobra.Command{
-		Use:                "k8surl",
+		Use:   "k8surl",
+		Short: "CLI to read k8s resources and open urls based on your template config",
+		Example: `kubectl get pod <pod-name> -o json | k8surl pod
+kubectl k8surl pod <pod-name>`,
 		SilenceUsage:       true,
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs, // allows us to not require -- for kubectl args
 		CompletionOptions:  cobra.CompletionOptions{DisableDefaultCmd: true},
-		Short:              "CLI to read k8s resources and open urls based on your template config",
-		Example: `kubectl get pod <pod-name> -o json | k8surl pod
-kubectl k8surl pod <pod-name>`,
 		Run: func(cmd *cobra.Command, args []string) {
 			obj, kind, err := commandInitilizer(cmd, args)
 			cobra.CheckErr(err)
@@ -79,9 +79,9 @@ func createSubCommandsFromConfig(rootCmd *cobra.Command) {
 		k, v := k, v
 		dynamicCmd := &cobra.Command{
 			Use:                k,
+			Short:              fmt.Sprintf("dynamic command for %s", k),
 			DisableFlagParsing: true,
 			DisableSuggestions: true,
-			Short:              fmt.Sprintf("dynamic command for %s", k),
 			Run: func(cmd *cobra.Command, args []string) {
 				obj, kind, err := commandInitilizer(cmd, args)
 				cobra.CheckErr(err)
@@ -91,6 +91,12 @@ func createSubCommandsFromConfig(rootCmd *cobra.Command) {
 				}
 				output(obj, v.Templates, v.Urls)
 			},
+		}
+		if v.Short != nil {
+			dynamicCmd.Short = *v.Short
+		}
+		if v.Example != nil {
+			dynamicCmd.Example = *v.Example
 		}
 		rootCmd.AddCommand(dynamicCmd)
 	}

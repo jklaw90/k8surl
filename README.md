@@ -25,6 +25,10 @@ pod:
       - "https://example.com/dashboards/xyz1?name={.metadata.name}&namespace={.metadata.namespace}"
 commands:
   meta:
+    short: open dashboards for namespaced things
+    example: |
+      kubectl k8surl meta get pods
+      kubectl get pods -ojson | k8surl meta
     kinds: ["*"]
     urls:
       - "{range .items[*]}https://example.com/dashboards/xyz?name={.metadata.name}&namespace={.metadata.namespace}{end}"
