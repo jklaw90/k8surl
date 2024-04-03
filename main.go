@@ -1,7 +1,14 @@
 package main
 
-import "github.com/jklaw90/k8surl/pkg/cmd"
+import (
+	"os"
+
+	"github.com/jklaw90/k8surl/pkg/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	err := cmd.NewK8surlCmd().Execute()
+	if err != nil {
+		os.Exit(1)
+	}
 }

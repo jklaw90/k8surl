@@ -8,8 +8,10 @@ type Config struct {
 type KindAndTemplates map[string]Tmpl
 
 type Command struct {
-	Tmpl  `mapstructure:",squash"`
-	Kinds []string `yaml:"kinds"`
+	Short   *string `yaml:"short"`
+	Example *string `yaml:"example"`
+	Tmpl    `mapstructure:",squash"`
+	Kinds   []string `yaml:"kinds"`
 }
 
 type Tmpl struct {

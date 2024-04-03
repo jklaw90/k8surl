@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
-	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/printers"
 	"k8s.io/client-go/kubernetes/scheme"

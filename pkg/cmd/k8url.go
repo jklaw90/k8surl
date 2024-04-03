@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/jklaw90/k8surl/pkg/parser"
@@ -12,73 +16,74 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-var (
-	config *Config
-)
+var config *Config
 
-var k8surlCmd = &cobra.Command{
-	Use:   "k8surl",
-	Short: "CLI to read k8s resources and open links based on your template config",
-	Long: `pipe in kubectl output to k8surl or pass in arguments like you would to kubectl.
-The config should be formatted with kind and array of urls for the type like:
-pod:
-  - https://mydashboard?pod_name={.metadata.name}
-ingress:
-  - ....
-To launch our pod urls enter:
-kubectl get pod nginx-xyz -o json | k8surl
-OR
-k8surl get pod nginx-xyz (eventually....)`,
-	Run: func(cmd *cobra.Command, args []string) {
-		obj, kind, err := parser.Decode(cmd.InOrStdin())
-		cobra.CheckErr(err)
+func NewK8surlCmd() *cobra.Command {
+	k8surlCmd := &cobra.Command{
+		Use:   "k8surl",
+		Short: "CLI to read k8s resources and open urls based on your template config",
+		Example: `kubectl get pod <pod-name> -o json | k8surl pod
+kubectl k8surl pod <pod-name>`,
+		SilenceUsage:       true,
+		DisableFlagParsing: true,
+		Args:               cobra.ArbitraryArgs, // allows us to not require -- for kubectl args
+		CompletionOptions:  cobra.CompletionOptions{DisableDefaultCmd: true},
+		Run: func(cmd *cobra.Command, args []string) {
+			obj, kind, err := commandInitilizer(cmd, args)
+			cobra.CheckErr(err)
 
-		kt, ok := config.KindAndTemplates[strings.ToLower(kind)]
-		if !ok {
-			cobra.CheckErr(fmt.Sprintf("%s isn't defined in the root of the configuration file", kind))
-		}
+			kt, ok := config.KindAndTemplates[strings.ToLower(kind)]
+			if !ok {
+				cobra.CheckErr(fmt.Sprintf("%s isn't defined in the root of the configuration file", kind))
+			}
 
-		if !parser.Allowed(kind, []string{kind}) {
-			cobra.CheckErr(fmt.Sprintf("%s isn't allowed in this command", kind))
-		}
+			if !parser.Allowed(kind, []string{kind}) {
+				cobra.CheckErr(fmt.Sprintf("%s isn't allowed in this command", kind))
+			}
 
-		output(obj, kt.Templates, kt.Urls)
-	},
-}
-
-func Execute() {
-	err := k8surlCmd.Execute()
-	if err != nil {
-		os.Exit(1)
+			output(obj, kt.Templates, kt.Urls)
+		},
 	}
+
+	createSubCommandsFromConfig(k8surlCmd)
+
+	return k8surlCmd
 }
 
-func init() {
-	initConfig()
-	browser.Stdout = nil // not sure if we should do something better here
-}
+func createSubCommandsFromConfig(rootCmd *cobra.Command) {
+	browser.Stdout = nil // reduce noise from browser package
 
-func initConfig() {
 	home, err := os.UserHomeDir()
 	cobra.CheckErr(err)
 	viper.AddConfigPath(home)
 	viper.SetConfigType("yaml")
 	viper.SetConfigName(".k8surl")
-	err = viper.ReadInConfig()
-	cobra.CheckErr(err)
+	cobra.CheckErr(viper.ReadInConfig())
+	cobra.CheckErr(viper.Unmarshal(&config))
 
-	if err := viper.Unmarshal(&config); err != nil {
-		fmt.Fprintln(os.Stderr)
-		cobra.CheckErr(fmt.Errorf("failed to unmsrshal config: %s", err.Error()))
+	configCmd := &cobra.Command{
+		Use:          "config",
+		Short:        "view the current configuration",
+		SilenceUsage: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			configPath := viper.GetViper().ConfigFileUsed()
+			config, err := os.ReadFile(configPath)
+			cobra.CheckErr(err)
+			fmt.Printf("Current configuration (%s):\n\n", configPath)
+			fmt.Println(string(config))
+		},
 	}
+	rootCmd.AddCommand(configCmd)
 
 	for k, v := range config.Commands {
 		k, v := k, v
 		dynamicCmd := &cobra.Command{
-			Use:   k,
-			Short: fmt.Sprintf("dynamic command for %s", k),
+			Use:                k,
+			Short:              fmt.Sprintf("dynamic command for %s", k),
+			DisableFlagParsing: true,
+			DisableSuggestions: true,
 			Run: func(cmd *cobra.Command, args []string) {
-				obj, kind, err := parser.Decode(cmd.InOrStdin())
+				obj, kind, err := commandInitilizer(cmd, args)
 				cobra.CheckErr(err)
 
 				if !parser.Allowed(kind, v.Kinds) {
@@ -87,8 +92,49 @@ func initConfig() {
 				output(obj, v.Templates, v.Urls)
 			},
 		}
-		k8surlCmd.AddCommand(dynamicCmd)
+		if v.Short != nil {
+			dynamicCmd.Short = *v.Short
+		}
+		if v.Example != nil {
+			dynamicCmd.Example = *v.Example
+		}
+		rootCmd.AddCommand(dynamicCmd)
 	}
+}
+
+// commandInitilizer is a helper function to decode the input from the command line or stdin
+func commandInitilizer(cmd *cobra.Command, args []string) (runtime.Object, string, error) {
+	if slices.ContainsFunc(args, func(arg string) bool {
+		return strings.EqualFold(arg, "--help") || strings.EqualFold(arg, "-h")
+	}) {
+		cmd.Help()
+		os.Exit(0)
+	}
+
+	var reader io.Reader
+	var cmdArgs []string
+	if len(args) > 0 {
+		if !slices.ContainsFunc(args, func(arg string) bool {
+			return strings.EqualFold(arg, "-o") || strings.EqualFold(arg, "--output")
+		}) {
+			cmdArgs = append(args, []string{"-o", "json"}...)
+		}
+
+		kubectlCmd := exec.Command("kubectl", cmdArgs...)
+		rawOutput, err := kubectlCmd.Output()
+		if err != nil {
+			return nil, "", err
+		}
+		reader = bytes.NewReader(rawOutput)
+	} else {
+		reader = cmd.InOrStdin()
+	}
+
+	o, kind, err := parser.Decode(reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("kubectl %s returned decoding input: %w", strings.Join(cmdArgs, " "), err)
+	}
+	return o, kind, nil
 }
 
 func output(obj runtime.Object, templates []string, urlTemplates []string) {
