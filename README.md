@@ -3,13 +3,21 @@
 k8surl is a simple application to parse Kubernetes manifets and render templates and/or open links
 it uses kubectls jsonpath lib but just adds some extra sugar to help you save those json templates somewhere with commands you can remember.
 
+
 ## Install
 
+### Krew
+```
+kubectl krew install --manifest-url https://raw.githubusercontent.com/jklaw90/k8surl/main/plugins/k8surl.yaml
+```
+
+### From Source
 Make sure to add a config file at `~/.k8surl.yaml`
 
 ```
 go install github.com/jklaw90/k8surl@latest
 ```
+
 
 ## Examples
 
