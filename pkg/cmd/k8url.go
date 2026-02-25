@@ -29,7 +29,7 @@ kubectl k8surl pod <pod-name>`,
 		SilenceUsage:       true,
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs, // allows us to not require -- for kubectl args
-		CompletionOptions:  cobra.CompletionOptions{DisableDefaultCmd: true},
+		ValidArgsFunction: kubectlCompletionFunc,
 		Run: func(cmd *cobra.Command, args []string) {
 			obj, kind, err := commandInitializer(cmd, args)
 			cobra.CheckErr(err)
@@ -87,6 +87,7 @@ func createSubCommandsFromConfig(rootCmd *cobra.Command) {
 		dynamicCmd := &cobra.Command{
 			Use:                k,
 			Short:              fmt.Sprintf("run templates for %s (kinds: %s)", k, strings.Join(v.Kinds, ", ")),
+			ValidArgsFunction:  kubectlCompletionFunc,
 			DisableFlagParsing: true,
 			DisableSuggestions: true,
 			Run: func(cmd *cobra.Command, args []string) {
