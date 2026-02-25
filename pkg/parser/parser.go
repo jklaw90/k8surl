@@ -2,10 +2,7 @@ package parser
 
 import (
 	"bytes"
-	"fmt"
 	"io"
-	"os"
-	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,13 +25,15 @@ func Decode(reader io.Reader) (runtime.Object, string, error) {
 }
 
 func Allowed(target string, allowedKinds []string) bool {
-	for i := 0; i < len(allowedKinds); i++ {
-		if allowedKinds[i] == "*" {
+	for _, kind := range allowedKinds {
+		if kind == "*" {
 			return true
 		}
-		allowedKinds[i] = strings.ToLower(allowedKinds[i])
+		if strings.EqualFold(kind, target) {
+			return true
+		}
 	}
-	return slices.Contains(allowedKinds, strings.ToLower(target))
+	return false
 }
 
 func RenderTemplates(object runtime.Object, templates []string) ([]string, error) {
@@ -46,7 +45,7 @@ func RenderTemplates(object runtime.Object, templates []string) ([]string, error
 		}
 		buf := new(bytes.Buffer)
 		if err := p.PrintObj(object, buf); err != nil {
-			fmt.Fprintf(os.Stderr, "error printing object: %v", err.Error())
+			return nil, err
 		}
 		resp = append(resp, buf.String())
 
