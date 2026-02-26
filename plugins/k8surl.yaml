@@ -4,46 +4,46 @@ kind: Plugin
 metadata:
   name: k8surl
 spec:
-  version: v0.1.0
+  version: v1.0.0
   platforms:
     - bin: k8surl.exe
-      uri: https://github.com/jklaw90/k8surl/releases/download/v0.1.0/k8surl_windows_arm64.zip
-      sha256: 0c465f949ed9fba435014be9d9955554911eabe0419bd05817314c17e174c7d6
+      uri: https://github.com/jklaw90/k8surl/releases/download/v1.0.0/k8surl_windows_arm64.zip
+      sha256: 716b83b5af86c805edb0aaabae46c8d120b42ca99ebcdd1cb3341772003f0624
       selector:
         matchLabels:
           os: windows
           arch: arm64
     - bin: k8surl.exe
-      uri: https://github.com/jklaw90/k8surl/releases/download/v0.1.0/k8surl_windows_amd64.zip
-      sha256: 3317c01c9e484edc26bb803c71c364d2a38b019713588684f490a6b223934081
+      uri: https://github.com/jklaw90/k8surl/releases/download/v1.0.0/k8surl_windows_amd64.zip
+      sha256: cee54fb836e5d91f0c445f33b3d8fac3efcdf603555cc6651b52a1d132ef74b2
       selector:
         matchLabels:
           os: windows
           arch: amd64
     - bin: k8surl
-      uri: https://github.com/jklaw90/k8surl/releases/download/v0.1.0/k8surl_linux_arm64.tar.gz
-      sha256: 76cfca39de52630ba3f4b89d35d6cbc0d0ce08645dce01b3c5eae10d829e8160
+      uri: https://github.com/jklaw90/k8surl/releases/download/v1.0.0/k8surl_linux_arm64.tar.gz
+      sha256: 17b0e1a5eb4061fed90b62a5ec191ad24ba02540e6b15d00cb69fbd9440457e3
       selector:
         matchLabels:
           os: linux
           arch: arm64
     - bin: k8surl
-      uri: https://github.com/jklaw90/k8surl/releases/download/v0.1.0/k8surl_linux_amd64.tar.gz
-      sha256: 91a1e8f1359ad11d1e0fbea0ac950d3d014690089a1fb9c806710378de44a83f
+      uri: https://github.com/jklaw90/k8surl/releases/download/v1.0.0/k8surl_linux_amd64.tar.gz
+      sha256: d641443d3a944ff3c51efb827e5e87f711f3d0cf3067b0e8c42d12f67ee6e1c6
       selector:
         matchLabels:
           os: linux
           arch: amd64
     - bin: k8surl
-      uri: https://github.com/jklaw90/k8surl/releases/download/v0.1.0/k8surl_darwin_arm64.tar.gz
-      sha256: b52f56881719f780f0ae42428f19209b1d88eb77faece2097fb6539fd1b77cff
+      uri: https://github.com/jklaw90/k8surl/releases/download/v1.0.0/k8surl_darwin_arm64.tar.gz
+      sha256: 0f0e91521a43afe9678220d7f17a417a523c855a3c57ec4d7d4e2f92995ced5a
       selector:
         matchLabels:
           os: darwin
           arch: arm64
     - bin: k8surl
-      uri: https://github.com/jklaw90/k8surl/releases/download/v0.1.0/k8surl_darwin_amd64.tar.gz
-      sha256: 8744ea10fd2c8917cde01d576b531f408003e852127e19c1d055d5688147add7
+      uri: https://github.com/jklaw90/k8surl/releases/download/v1.0.0/k8surl_darwin_amd64.tar.gz
+      sha256: 66feeb57bd8cda3cf91f7278b28ea5b6bd6e0a82a3405af8c7e6c87039c5ed88
       selector:
         matchLabels:
           os: darwin
