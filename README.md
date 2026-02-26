@@ -1,6 +1,6 @@
 # k8surl
 
-k8surl is a simple application to parse Kubernetes manifets and render templates and/or open links
+k8surl is a simple application to parse Kubernetes manifests and render templates and/or open links
 it uses kubectls jsonpath lib but just adds some extra sugar to help you save those json templates somewhere with commands you can remember.
 
 

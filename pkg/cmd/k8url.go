@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -27,18 +29,18 @@ kubectl k8surl pod <pod-name>`,
 		SilenceUsage:       true,
 		DisableFlagParsing: true,
 		Args:               cobra.ArbitraryArgs, // allows us to not require -- for kubectl args
-		CompletionOptions:  cobra.CompletionOptions{DisableDefaultCmd: true},
+		ValidArgsFunction: kubectlCompletionFunc,
 		Run: func(cmd *cobra.Command, args []string) {
-			obj, kind, err := commandInitilizer(cmd, args)
+			obj, kind, err := commandInitializer(cmd, args)
 			cobra.CheckErr(err)
 
 			kt, ok := config.KindAndTemplates[strings.ToLower(kind)]
 			if !ok {
-				cobra.CheckErr(fmt.Sprintf("%s isn't defined in the root of the configuration file", kind))
+				cobra.CheckErr(fmt.Errorf("%s is not defined in the root of the configuration file", kind))
 			}
 
 			if !parser.Allowed(kind, []string{kind}) {
-				cobra.CheckErr(fmt.Sprintf("%s isn't allowed in this command", kind))
+				cobra.CheckErr(fmt.Errorf("%s is not allowed in this command", kind))
 			}
 
 			output(obj, kt.Templates, kt.Urls)
@@ -58,7 +60,13 @@ func createSubCommandsFromConfig(rootCmd *cobra.Command) {
 	viper.AddConfigPath(home)
 	viper.SetConfigType("yaml")
 	viper.SetConfigName(".k8surl")
-	cobra.CheckErr(viper.ReadInConfig())
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			cobra.CheckErr(fmt.Errorf("config file not found: create ~/.k8surl.yaml to get started\n  see examples at: https://github.com/jklaw90/k8surl#examples"))
+		}
+		cobra.CheckErr(err)
+	}
 	cobra.CheckErr(viper.Unmarshal(&config))
 
 	configCmd := &cobra.Command{
@@ -76,18 +84,18 @@ func createSubCommandsFromConfig(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(configCmd)
 
 	for k, v := range config.Commands {
-		k, v := k, v
 		dynamicCmd := &cobra.Command{
 			Use:                k,
-			Short:              fmt.Sprintf("dynamic command for %s", k),
+			Short:              fmt.Sprintf("run templates for %s (kinds: %s)", k, strings.Join(v.Kinds, ", ")),
+			ValidArgsFunction:  kubectlCompletionFunc,
 			DisableFlagParsing: true,
 			DisableSuggestions: true,
 			Run: func(cmd *cobra.Command, args []string) {
-				obj, kind, err := commandInitilizer(cmd, args)
+				obj, kind, err := commandInitializer(cmd, args)
 				cobra.CheckErr(err)
 
 				if !parser.Allowed(kind, v.Kinds) {
-					cobra.CheckErr(fmt.Sprintf("%s is not allowed in this command", kind))
+					cobra.CheckErr(fmt.Errorf("%s is not allowed in this command", kind))
 				}
 				output(obj, v.Templates, v.Urls)
 			},
@@ -102,18 +110,22 @@ func createSubCommandsFromConfig(rootCmd *cobra.Command) {
 	}
 }
 
-// commandInitilizer is a helper function to decode the input from the command line or stdin
-func commandInitilizer(cmd *cobra.Command, args []string) (runtime.Object, string, error) {
+// commandInitializer is a helper function to decode the input from the command line or stdin
+func commandInitializer(cmd *cobra.Command, args []string) (runtime.Object, string, error) {
 	if slices.ContainsFunc(args, func(arg string) bool {
-		return strings.EqualFold(arg, "--help") || strings.EqualFold(arg, "-h")
+		return arg == "--help" || arg == "-h"
 	}) {
 		cmd.Help()
-		os.Exit(0)
+		return nil, "", fmt.Errorf("")
 	}
 
 	var reader io.Reader
 	var cmdArgs []string
 	if len(args) > 0 {
+		if _, err := exec.LookPath("kubectl"); err != nil {
+			return nil, "", fmt.Errorf("kubectl not found in PATH: pipe input via stdin instead (e.g. cat resource.json | k8surl)")
+		}
+
 		if !slices.ContainsFunc(args, func(arg string) bool {
 			return strings.EqualFold(arg, "-o") || strings.EqualFold(arg, "--output")
 		}) {
@@ -123,6 +135,10 @@ func commandInitilizer(cmd *cobra.Command, args []string) (runtime.Object, strin
 		kubectlCmd := exec.Command("kubectl", cmdArgs...)
 		rawOutput, err := kubectlCmd.Output()
 		if err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+				return nil, "", fmt.Errorf("kubectl %s: %s", strings.Join(cmdArgs, " "), strings.TrimSpace(string(exitErr.Stderr)))
+			}
 			return nil, "", err
 		}
 		reader = bytes.NewReader(rawOutput)
@@ -137,6 +153,29 @@ func commandInitilizer(cmd *cobra.Command, args []string) (runtime.Object, strin
 	return o, kind, nil
 }
 
+var urlPattern = regexp.MustCompile(`https?://`)
+
+// splitURLs splits a string that may contain multiple concatenated URLs
+// into individual URLs by finding http:// or https:// boundaries.
+func splitURLs(s string) []string {
+	locs := urlPattern.FindAllStringIndex(s, -1)
+	if len(locs) == 0 {
+		return nil
+	}
+	var urls []string
+	for i, loc := range locs {
+		start := loc[0]
+		var end int
+		if i+1 < len(locs) {
+			end = locs[i+1][0]
+		} else {
+			end = len(s)
+		}
+		urls = append(urls, s[start:end])
+	}
+	return urls
+}
+
 func output(obj runtime.Object, templates []string, urlTemplates []string) {
 	renderedTemplates, err := parser.RenderTemplates(obj, templates)
 	cobra.CheckErr(err)
@@ -149,10 +188,11 @@ func output(obj runtime.Object, templates []string, urlTemplates []string) {
 	}
 
 	for _, url := range urls {
-		// TODO cleanup - template will be a single string we need to split somehow...
-		allUrls := strings.Split(strings.TrimPrefix(url, "https://"), "https://")
-		for _, u := range allUrls {
-			browser.OpenURL(fmt.Sprintf("https://%s", u)) // nolint: errcheck
+		for _, u := range splitURLs(url) {
+			fmt.Fprintf(os.Stderr, "Opening: %s\n", u)
+			if err := browser.OpenURL(u); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to open URL %s: %v\n", u, err)
+			}
 		}
 	}
 }
